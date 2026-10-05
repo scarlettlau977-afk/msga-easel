@@ -179,11 +179,11 @@ export default function ChatPage({ session, stream, onSend, onStop, onResend, on
       <div className="chat-page">
         <div className="chat-hero">
           <div className="chat-hero-brand">
-            <img src="./static/easel-icon-transparent.png" alt="" />
-            <span>Easel</span>
+            <img src="./static/msga-mark.svg" alt="MSGA" />
+            <span>MSGA</span>
           </div>
           <h1 className="chat-hero-title">{greeting()}</h1>
-          <p className="chat-hero-sub">从选题到发布，一站式帮你把想法做成能发的内容。</p>
+          <p className="chat-hero-sub">塞班 AI 智能体 · 让企业知识转化为内容与业务行动</p>
           {inputBox(true)}
           <div className="suggestions">
             {SUGGESTIONS.map((s) => (

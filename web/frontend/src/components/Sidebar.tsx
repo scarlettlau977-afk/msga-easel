@@ -116,8 +116,8 @@ export default function Sidebar({
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img className="sidebar-logo-icon" src="./static/easel-icon-transparent.png" alt="" />
-          <h1>Easel</h1>
+          <img className="sidebar-logo-icon" src="./static/msga-mark.svg" alt="MSGA" />
+          <h1>MSGA</h1>
           <ThemeToggle />
         </div>
         <select

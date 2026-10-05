@@ -1,5 +1,8 @@
 :root {
-  /* ---- Palette (reuse the main landing page's paper, mist, blue and peach) ---- */
+  /* ---- MSGA enterprise palette ---- */
+  --brand-navy: #10243a;
+  --brand-teal: #16a6a1;
+  --brand-cyan: #55d6c2;
   --bg: #ffffff;
   --bg-elev: #ffffff;
   --surface: #ffffff;
@@ -10,11 +13,11 @@
   --text: #17191c;
   --text-secondary: #777b86;
   --text-tertiary: #979799;
-  --accent-start: #158f9a;
-  --accent-end: #3f56a8;
-  --accent-soft: rgba(220, 234, 251, 0.72);
+  --accent-start: #087f8c;
+  --accent-end: #16a6a1;
+  --accent-soft: rgba(22, 166, 161, 0.12);
   --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-end));
-  --accent-gradient-soft: linear-gradient(135deg, #eaf3fd, #fbede4);
+  --accent-gradient-soft: linear-gradient(135deg, #e2f6f3, #edf4fb);
   --green: #16a34a;
   --trend-up: #70a98a;
   --trend-down: #c98585;
@@ -99,20 +102,20 @@ body {
 
 .sidebar-logo h1 {
   color: var(--text);
-  font-family: 'Bodoni Moda', 'Didot', 'Baskerville', serif;
+  font-family: 'Inter', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   font-size: 24px;
-  font-style: italic;
+  font-style: normal;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: -1px;
+  letter-spacing: -0.7px;
 }
 
 .sidebar-logo-icon {
   width: 30px; height: 30px;
-  border-radius: 9px;
+  border-radius: 10px;
   display: block;
   object-fit: cover;
-  box-shadow: 0 5px 14px rgba(51, 66, 148, 0.1);
+  box-shadow: 0 5px 14px rgba(16, 36, 58, 0.16);
 }
 
 .persona-select {
