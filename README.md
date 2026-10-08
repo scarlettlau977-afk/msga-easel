@@ -13,13 +13,6 @@ MSGA 复用 Easel 已验证的 OpenClaw Agent、Skill、画像、内容归档和
 → 发布任务 → 互动扫描 → 意向识别 → CRM → 跟进建议
 ```
 
-当前已完成的换皮和基础改造包括：
-
-- Web 工作台品牌改为“MSGA 塞班 AI 智能体”。
-- 新增 MSGA 图标和蓝绿色企业视觉主题。
-- 欢迎页改为企业内容与业务行动场景。
-- 保留 Easel/OpenClaw 的 CLI、Skill、画像和内容库能力。
-- 保留 OpenClaw 独立 profile 机制，避免覆盖用户已有配置。
 
 ## 与上游 Easel 的关系
 
@@ -27,11 +20,6 @@ MSGA 复用 Easel 已验证的 OpenClaw Agent、Skill、画像、内容归档和
 
 上游项目作者与贡献者：ZJU-REAL / REAL Lab / OpenDCAI Lab 及 Easel 项目贡献者。MSGA 保留上游版权声明、`LICENSE` 和原始许可条件，并在本 README 中明确标注来源与修改范围。
 
-本项目的修改主要位于：
-
-- `web/frontend/`：MSGA 前端品牌、标题、欢迎页和视觉主题。
-- `web/static/`：兼容静态入口与 MSGA 图标。
-- `app/`、`skills/`、`docs/`：MSGA 业务模型、OpenClaw Skill 和企业工作流设计。
 
 这不是 ZJU-REAL/Easel 的官方版本，也不代表上游团队对 MSGA 的背书。使用时请同时遵守本仓库 `LICENSE` 以及上游项目的 Apache License 2.0 条款。
 
