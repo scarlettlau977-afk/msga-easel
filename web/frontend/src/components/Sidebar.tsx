@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { ChatSession } from '../lib/store';
-import type { PersonaItem } from '../lib/api';
 import type { ComponentType } from 'react';
 import {
-  IconChat, IconSkills, IconOutputs, IconAccounts, IconProfile,
+  IconChat, IconSkills, IconOutputs, IconAccounts,
   IconNewChat, IconEdit, IconArchive, IconUnarchive, IconTrash, IconChevron,
   IconDashboard,
 } from './icons';
@@ -15,10 +14,7 @@ export type Page = 'dashboard' | 'chat' | 'trends' | 'ideas' | 'calendar' | 'pub
 interface SidebarProps {
   currentPage: Page;
   onPageChange: (page: Page) => void;
-  personas: PersonaItem[];
   selectedPersona: string;
-  onPersonaChange: (persona: string) => void;
-  onNewProfile: () => void;
   sessions: ChatSession[];
   activeSessionId: string | null;
   onSessionSelect: (id: string) => void;
@@ -37,18 +33,14 @@ const NAV: { page: Page; Icon: ComponentType<{ size?: number }>; label: string }
   { page: 'dashboard', Icon: IconDashboard, label: '工作台' },
   { page: 'chat', Icon: IconChat, label: '对话' },
   { page: 'skills', Icon: IconSkills, label: '技能库' },
-  { page: 'outputs', Icon: IconOutputs, label: '内容库' },
+  { page: 'outputs', Icon: IconOutputs, label: '生成内容' },
   { page: 'accounts', Icon: IconAccounts, label: '账号' },
-  { page: 'profile', Icon: IconProfile, label: '画像' },
 ];
 
 export default function Sidebar({
   currentPage,
   onPageChange,
-  personas,
   selectedPersona,
-  onPersonaChange,
-  onNewProfile,
   sessions,
   activeSessionId,
   onSessionSelect,
@@ -118,25 +110,14 @@ export default function Sidebar({
     <div className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img className="sidebar-logo-icon" src="./static/easel-icon-transparent.png" alt="" />
-          <h1>Easel</h1>
+          <img className="sidebar-logo-icon" src="./static/saipan-logo.png" alt="Saipan" />
+          <h1>Saipan</h1>
           <ThemeToggle />
         </div>
-        <select
-          className="persona-select"
-          value={selectedPersona}
-          onChange={(e) => {
-            if (e.target.value === '__new__') { onNewProfile(); return; }
-            onPersonaChange(e.target.value);
-          }}
-          title="选择用户画像（一个对话对应一个画像：切换会新建一个对话）"
-        >
-          <option value="">通用模式</option>
-          {personas.map((p) => (
-            <option key={p.name} value={p.name}>{p.name}</option>
-          ))}
-          <option value="__new__">+ 新建画像…</option>
-        </select>
+        <div className="persona-fixed" title={selectedPersona ? `公司画像：${selectedPersona}` : '公司画像'}>
+          <span className="persona-fixed-label">公司画像</span>
+          {selectedPersona && <span className="persona-fixed-name">{selectedPersona}</span>}
+        </div>
       </div>
 
       <nav className="sidebar-nav">

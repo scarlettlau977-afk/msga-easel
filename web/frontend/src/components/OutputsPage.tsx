@@ -242,7 +242,7 @@ export default function OutputsPage({ jumpPath, onJumpHandled }: OutputsPageProp
         <div>
           <h1 className="page-title">
             <IconOutputs size={21} />
-            <span className="crumb" onClick={() => goTo(0)}>内容库</span>
+            <span className="crumb" onClick={() => goTo(0)}>生成内容</span>
             {stack.map((name, i) => (
               <span key={i}>
                 <span className="crumb-sep">/</span>

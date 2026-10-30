@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  createSchedule, executeSkill, runAgent, streamChat,
+  executeSkill, runAgent, streamChat,
   fetchAccounts, publishNow, publishStatus, submitPublishSms, fetchOutputs, mediaUrl,
 } from '../lib/api';
 import type { AccountItem, OutputFile } from '../lib/api';
 import { loadPublishDraft, savePublishDraft } from '../lib/store';
 import { renderMarkdown } from '../lib/sanitize';
-import { IconPublish, IconCopy, IconCheck, IconCalendar, IconSkills, IconEdit, IconStop, IconTrash } from './icons';
+import { IconPublish, IconCopy, IconCheck, IconSkills, IconEdit, IconStop, IconTrash } from './icons';
 
 interface PublishPageProps {
   persona: string;
@@ -280,23 +280,12 @@ export default function PublishPage({ persona }: PublishPageProps) {
     navigator.clipboard?.writeText(text);
     setCopied(key); setTimeout(() => setCopied(''), 1400);
   };
-  const addToCalendar = async (key: string) => {
-    if (empty) return;
-    const d = new Date();
-    await createSchedule({
-      title: title.trim() || effective(key).slice(0, 20), date: d.toISOString().slice(0, 10),
-      platform: PLATFORMS.find((p) => p.key === key)?.label || '', time: '', status: 'draft', note: effective(key),
-    });
-    showToast('已存为草稿并加入今天的日历');
-  };
-
   const canPublish = platforms.some((k) => PUBLISHABLE.has(k));
 
   return (
     <div className="publish-page">
       <div className="publish-editor">
         <h1 className="page-title"><IconPublish size={21} /> 发布中心</h1>
-        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 一键真发布。</p>
 
         <label className="field-label">标题</label>
         <input className="field" value={title} placeholder="标题（部分平台需要）"
@@ -320,7 +309,6 @@ export default function PublishPage({ persona }: PublishPageProps) {
 
         <label className="field-label" style={{ marginTop: 14 }}>
           媒体附件 {selectedMedia.length > 0 && <span className="pv-badge">{selectedMedia.length} 个</span>}
-          <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 12 }}>（小红书/抖音/快手/微信视频号/B站必需，从内容库选；抖音、视频号、B站须为视频）</span>
         </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-sm" onClick={() => setShowPicker((v) => !v)}>
@@ -360,9 +348,6 @@ export default function PublishPage({ persona }: PublishPageProps) {
           )}
           <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}>
             <IconCheck size={14} /> {checking ? '预检中…' : '发布前预检'}
-          </button>
-          <button className="btn btn-sm" disabled={empty} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}>
-            <IconCalendar size={14} /> 存草稿并排期
           </button>
           <button className="btn btn-sm btn-primary" disabled={empty || publishing || checking || !canPublish}
             title={canPublish ? '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}

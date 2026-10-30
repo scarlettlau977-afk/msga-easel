@@ -181,8 +181,8 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       <div className="chat-page">
         <div className="chat-hero">
           <div className="chat-hero-brand">
-            <img src="./static/easel-icon-transparent.png" alt="" />
-            <span>Easel</span>
+            <img src="./static/saipan-logo.png" alt="Saipan" />
+            <span>Saipan</span>
           </div>
           <h1 className="chat-hero-title">{greeting()}</h1>
           <p className="chat-hero-sub">{apiDirect ? 'API 直连：写文案、策划选题、分析附件。本机工具和自动发布未启用。'

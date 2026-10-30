@@ -10,7 +10,7 @@ import DashboardPage from './components/DashboardPage';
 import TrendsPage from './components/TrendsPage';
 import CalendarPage from './components/CalendarPage';
 import IdeasPage from './components/IdeasPage';
-import PublishPage from './components/PublishingPage';
+import PublishPage from './components/PublishPage';
 import BreakdownPage from './components/BreakdownPage';
 import SubNav from './components/SubNav';
 import OnboardingWizard from './components/OnboardingWizard';
@@ -46,7 +46,7 @@ function onboardingSeen(): boolean {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [personas, setPersonas] = useState<PersonaItem[]>([]);
+  const [, setPersonas] = useState<PersonaItem[]>([]);
   const [selectedPersona, setSelectedPersona] = useState('');
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions());
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -173,6 +173,9 @@ export default function App() {
     Promise.all([fetchStatus(), bootstrap])
       .then(([data, boot]) => {
         setPersonas(data.personas || []);
+        if (!selectedPersona && data.personas?.length) {
+          setSelectedPersona(data.personas[0].name);
+        }
         setGatewayStatus(data.gateway ? 'connected' : 'disconnected');
         setApiDirect(data.transport === 'api');
         setAgentRuntime(data.runtime || 'openclaw');
@@ -765,37 +768,13 @@ export default function App() {
     }
   };
 
-  const handlePersonaChange = useCallback((persona: string) => {
-    setSelectedPersona(persona);
-    setCurrentPage('chat');
-    const cur = sessionsRef.current.find((s) => s.id === activeSessionId);
-    if (cur && cur.messages.length === 0) {
-      setSessions((prev) => {
-        const updated = prev.map((s) =>
-          s.id === activeSessionId ? { ...s, persona: persona || undefined } : s);
-        saveSessions(updated);
-        return updated;
-      });
-      return;
-    }
-    const newSession = createSession(persona || undefined);
-    setSessions((prev) => {
-      const updated = [newSession, ...prev];
-      saveSessions(updated);
-      return updated;
-    });
-    setActiveSessionId(newSession.id);
-  }, [activeSessionId]);
 
   return (
     <div className="app-layout">
       <Sidebar
         currentPage={currentPage}
         onPageChange={setCurrentPage}
-        personas={personas}
         selectedPersona={selectedPersona}
-        onPersonaChange={handlePersonaChange}
-        onNewProfile={() => setShowWizard(true)}
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSessionSelect={handleSessionSelect}

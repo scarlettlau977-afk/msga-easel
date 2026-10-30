@@ -48,10 +48,11 @@ from easel.openclaw_cmd import openclaw_base_cmd
 from easel.persona import (load_profile_text, persona_prefix, chat_turn_message,
                            profile_exists, valid_persona_name, _FILE_ORDER)
 from easel.timeouts import TIMEOUT_CHAT, TIMEOUT_DIRECT, TIMEOUT_PRODUCE
-from easel.manual_publish import build_package, publishing_mode
 from easel.direct_api import (DirectAPIError, SYSTEM_PROMPT, api_config, api_mode,
                               history_path, read_settings, stream_chat)
+from easel.dify import retrieve_context
 from easel import harnesses
+from easel import database
 from easel.harnesses import store as harness_store
 from easel.harnesses.base import HarnessError, RunRequest
 try:
@@ -426,7 +427,7 @@ for _spec in SKILL_API_REQUIREMENTS.values():
             _ENV_ALLOWLIST.add(_key["env"])
             _ENV_ALLOWLIST.update(_key.get("aliases", []))
 
-ENV_FILE = PROJECT_ROOT / ".env"
+ENV_FILE = Path(os.environ.get("EASEL_ENV_FILE", PROJECT_ROOT / ".env"))
 _HARNESS_LOOP = None
 _PLACEHOLDER_RE = re.compile(r"replace_me|your[-_]?api[-_]?key|xxx|^\.{3}$|^<.*>$", re.I)
 
@@ -966,19 +967,9 @@ def _agent_thinking_level() -> str:
     return THINKING_LEVEL
 
 
-def _publishing_message(message: str) -> str:
-    if publishing_mode(read_settings(ENV_FILE)) == "manual":
-        return ("【当前 Web 发布方式：人工提交】AI 只负责创作、排版、素材和审核建议。"
-                "不要调用发布脚本、发布接口、浏览器代填或代点发布。"
-                "引导用户在发布中心审核、复制或导出，再在官方页面亲自提交。"
-                "导出、复制、打开网页和排期均不代表已发布。\n\n" + message)
-    return message
-
-
 def run_agent_sync(msg: str, timeout: int = TIMEOUT_DIRECT, session_id: str | None = None) -> str:
     if _direct_api_enabled():
         raise HTTPException(409, "API 直连模式支持聊天；此操作需要具备文件和技能执行工具的 Agent 运行时")
-    msg = _publishing_message(msg)
     sk = session_id or f'web-{int(time.time() * 1000)}'
     runtime = _chat_backend(session_id)
     if runtime not in ("api", "openclaw"):
@@ -1158,6 +1149,21 @@ async def index():
     if react_index.is_file():
         return FileResponse(react_index, media_type="text/html", headers=no_cache)
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html", headers=no_cache)
+
+
+@app.get("/api/db/health")
+async def api_db_health():
+    """Database integration probe for deployments and future data services."""
+    try:
+        return database.health()
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/db/config")
+async def api_db_config():
+    """Return non-sensitive database adapter status; never exposes credentials."""
+    return {"configured": database.configured(), "engine": "mysql", "api": "v1"}
 
 
 @app.get("/onepage")
@@ -2633,7 +2639,7 @@ def _chat_message(req: ChatRequest) -> str:
         message = f"{message}\n\n{context}" if message else context
     if not message:
         raise HTTPException(400, "消息不能为空")
-    return _publishing_message(chat_turn_message(message, req.persona))
+    return chat_turn_message(message, req.persona)
 
 
 def _direct_chat_content(req: ChatRequest) -> tuple[str | list, str]:
@@ -2938,6 +2944,9 @@ async def _harness_ask(sk: str, questions: list[dict], emit) -> dict:
 
 async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: str,
                             config: dict, emit, timeout: int = TIMEOUT_CHAT, *, interactive=True) -> str:
+    knowledge = await retrieve_context(read_settings(ENV_FILE), message)
+    if knowledge:
+        message += "\n\n〔Dify 知识库检索结果，仅作为参考；请优先依据资料回答，并说明资料未覆盖的部分〕\n" + knowledge
     pk = f"web:{sk}"
     turn_id = req.turnId or uuid.uuid4().hex
     full_text: list[str] = []
@@ -3029,6 +3038,10 @@ async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: st
 
 
 async def _run_direct_chat(req: ChatRequest, sk: str, content, system: str, emit) -> str:
+    query = req.message.strip()
+    knowledge = await retrieve_context(read_settings(ENV_FILE), query)
+    if knowledge:
+        system += "\n\n以下是 Dify 知识库检索结果。请基于这些资料回答；资料没有覆盖时明确说明：\n" + knowledge
     """Run one API turn with the same stop/recovery/session locking as Gateway chat."""
     pk = f"web:{sk}"
     turn_id = req.turnId or uuid.uuid4().hex
@@ -3217,6 +3230,10 @@ async def api_chat_stream(req: ChatRequest):
         full_text: list[str] = []        # 累积完整回答，供断线取回
         timed_out = False                # 只有真·超时才 terminate 进程；断线绝不杀
 
+        # Claim this turn before waiting for locks, so recovery cannot return the previous turn.
+        if not direct and not alternate:
+            _save_turn(pk, "running", "", {"turn_id": turn_id})
+
         event_path = _job_event_file(turn_id)
         try:
             event_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3368,63 +3385,41 @@ async def api_chat_stream(req: ChatRequest):
         xlock = _CrossProcLock(sk)
         if lock.locked():
             to_client("activity", "⏳ 这个会话上一条还在跑，排队等它结束再开始…")
-        locked = claimed = started = False
-        startup_reason = "spawn_failed"
-        startup_error = None
-        try:
-            await lock.acquire()
-            locked = True
-            # Match direct-API locking: nonblocking attempts with cancellable
-            # sleeps. An executor worker could acquire a lock after cancellation
-            # and outlive its owner, leaving the session permanently locked.
-            lock_deadline = time.monotonic() + min(TIMEOUT_CHAT, 300)
-            while True:
-                if xlock.acquire(0):
-                    break
-                xlock.release()
-                if time.monotonic() >= lock_deadline:
-                    startup_error = "这个会话正在另一个窗口运行，请稍候再试。"
-                    return
-                await asyncio.sleep(0.2)
+        await lock.acquire()
+        # flock 可能阻塞（等另一进程/标签跑完），放线程池避免卡住事件循环
+        got = await loop.run_in_executor(None, xlock.acquire, min(TIMEOUT_CHAT, 300))
+        if not got:
+            lock.release()
+            _save_turn(pk, "done", "这个会话正在另一个窗口运行，请稍候再试。", {
+                "turn_id": turn_id, "clean_end": False, "stop_reason": "session_lock_timeout",
+            })
+            to_client("activity", "⏳ 这个会话正在另一个窗口运行，请稍候再试")
+            to_client("done", sessionKey=sk)
+            client_q.put_nowait(CLIENT_DONE)
+            return
 
-            # Only the owner of both locks may replace the session snapshot.
-            _save_turn(pk, "running", "", {"turn_id": turn_id})
-            claimed = True
-
-            # Transport selection includes a blocking network probe; keep it
-            # off the event loop. It cannot start an agent or acquire locks.
-            is_http = (await asyncio.to_thread(_resolve_transport, sk)) == "http"
-            if is_http:
-                # HTTP 直连常驻网关：无进程冷启动（agent 在 gateway 进程里跑）
-                proc = _GatewayHttpProc()
-            else:
+        # _resolve_transport 里既有 stat 又有阻塞 urllib 探针（最多 3s），必须丢线程：
+        # 直接在协程里调会把整个事件循环——连同其它会话正在推的 SSE——一起卡住。
+        is_http = (await asyncio.to_thread(_resolve_transport, sk)) == "http"
+        if is_http:
+            # HTTP 直连常驻网关：无进程冷启动（agent 在 gateway 进程里跑）
+            proc = _GatewayHttpProc()
+        else:
+            try:
                 proc = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     cwd=str(PROJECT_ROOT), text=True, bufsize=1, env=env,
                 )
-            started = True
-        except asyncio.CancelledError:
-            startup_reason = "cancelled"
-            raise
-        except Exception:
-            startup_error = "❌ 启动失败，请重试"
-            return
-        finally:
-            if not started:
-                # A queued/cancelled waiter never owns the previous snapshot.
-                # Persist an owned failure before releasing either lock.
-                if claimed:
-                    _save_turn(pk, "done", startup_error or "", {
-                        "turn_id": turn_id, "clean_end": False,
-                        "stop_reason": startup_reason,
-                    })
+            except BaseException:
+                lock.release()
                 xlock.release()
-                if locked:
-                    lock.release()
-                if startup_error:
-                    to_client("error", startup_error)
+                _save_turn(pk, "done", "❌ 启动失败，请重试", {
+                    "turn_id": turn_id, "clean_end": False, "stop_reason": "spawn_failed",
+                })
+                to_client("error", "❌ 启动失败，请重试")
                 to_client("done", sessionKey=sk)
                 client_q.put_nowait(CLIENT_DONE)
+                return
         _RUNNING_CHAT[sk] = proc         # 注册运行中进程（HTTP 模式为伪进程），供 /api/chat/stop
         # 经 gateway 后客户端 stdout 没有 model-fetch 标记（那是独立跑 agent 才有），先立刻
         # 给一个「正在思考」活动指示，随后 token 从共享 raw stream 流进来接管显示。
@@ -3762,9 +3757,6 @@ async def api_chat_stream(req: ChatRequest):
 
     def _bg_done(t):
         _BG_TASKS.discard(t)
-        if t.cancelled():
-            client_q.put_nowait(CLIENT_DONE)
-            return
         try:
             exc = t.exception()   # 取出异常避免「never retrieved」告警
         except Exception:
@@ -4809,37 +4801,6 @@ class PublishRequest(BaseModel):
     tags: str = ''
 
 
-class ManualPublishRequest(BaseModel):
-    title: str = Field(default='', max_length=1000)
-    body: str = Field(default='', max_length=100000)
-    tags: str = Field(default='', max_length=2000)
-    media: list[str] = Field(default_factory=list, max_length=32)
-    reviewed: StrictBool = False
-
-
-@app.get("/api/publishing-policy")
-def api_publishing_policy():
-    mode = publishing_mode(read_settings(ENV_FILE))
-    return {"mode": mode, "automaticSubmission": mode == "automated"}
-
-
-def _require_automated_publishing() -> None:
-    if publishing_mode(read_settings(ENV_FILE)) != "automated":
-        raise HTTPException(403, '当前为人工发布模式，请审核后复制或导出，在平台官方发布页亲自提交')
-
-
-@app.post("/api/manual-publish/{platform}/export")
-def api_manual_publish_export(platform: str, req: ManualPublishRequest):
-    """Build a local handoff package; never contact a platform or mark it published."""
-    try:
-        package = build_package(OUTPUTS_DIR, platform, req.title, req.body,
-                                req.tags, req.media, req.reviewed)
-    except ValueError as error:
-        raise HTTPException(400, str(error)) from error
-    return {"path": package.relative_to(OUTPUTS_DIR.resolve()).as_posix(),
-            "filename": package.name, "published": False}
-
-
 def _write_publish_status(status_file: Path, state: str, message: str = '') -> None:
     """写异步发布状态（与 login_state 同格式），原子写。"""
     try:
@@ -4932,7 +4893,6 @@ async def api_publish_status(platform: str):
 @app.post("/api/publish/{platform}/sms")
 async def api_publish_sms(platform: str, req: SmsCodeRequest):
     """发布触发短信墙时回填验证码（写发布 runner 轮询的一次性验证码文件）。"""
-    _require_automated_publishing()
     if platform not in LOGIN_RUNNERS:
         raise HTTPException(404, '未知平台')
     code = ''.join(ch for ch in (req.code or '') if ch.isdigit())
@@ -4946,7 +4906,6 @@ async def api_publish_sms(platform: str, req: SmsCodeRequest):
 @app.post("/api/publish/{platform}")
 async def api_publish(platform: str, req: PublishRequest):
     """一键发布：分发到对应 publisher 脚本真发（--exec）。二次确认在前端。"""
-    _require_automated_publishing()
     cfg = LOGIN_RUNNERS.get(platform)
     if not cfg:
         raise HTTPException(404, '未知平台')
