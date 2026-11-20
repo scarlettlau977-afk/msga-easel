@@ -106,7 +106,8 @@ class CodexAdapter:
             rpc.native_id = thread_id
             policy = {"type": "readOnly"} if request.sandbox == "read-only" else {
                 "type": "workspaceWrite", "writableRoots": [str(request.cwd)],
-                "networkAccess": False}
+                "networkAccess": request.env.get("EASEL_CODEX_NETWORK_ACCESS", "").strip().lower()
+                                  in ("1", "true", "yes", "on")}
             params = {"threadId": thread_id, "input": [{"type": "text", "text": request.prompt}],
                       "approvalPolicy": "on-request", "sandboxPolicy": policy}
             if request.model:
