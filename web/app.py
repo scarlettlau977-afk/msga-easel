@@ -3016,8 +3016,8 @@ async def _run_harness_chat(req: ChatRequest, sk: str, message: str, runtime: st
     except (HarnessError, HTTPException) as error:
         error_message = _scrub_secrets(str(error.detail if isinstance(error, HTTPException) else error))
         emit("error", error_message)
-    except Exception:
-        error_message = "Agent 执行失败，请检查本机 CLI、登录和模型配置"
+    except Exception as error:
+        error_message = _scrub_secrets(f"Agent 执行异常：{type(error).__name__}: {error}")
         emit("error", error_message)
     finally:
         if claimed:

@@ -46,11 +46,11 @@ from output_paths import validate_output_path
 
 ENV_BASE_URL = "IMG_BASE_URL"
 ENV_MODEL = "IMG_MODEL"
-ENV_API_KEY = "IMG_API_KEY"
+ENV_API_KEY = "MODELFLARE_API_KEY"
 ENV_ALIASES = {
     ENV_BASE_URL: ("OPENAI_BASE_URL", "OPENAI_API_BASE", "BASE_URL"),
     ENV_MODEL: ("OPENAI_IMAGE_MODEL", "IMAGE_MODEL", "OPENAI_MODEL"),
-    ENV_API_KEY: ("OPENAI_API_KEY", "API_KEY"),
+    ENV_API_KEY: (),
 }
 
 VALID_RATIOS = ("auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5",

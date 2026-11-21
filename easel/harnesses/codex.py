@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 from easel import __version__
 
@@ -18,6 +19,10 @@ class CodexAdapter:
     async def run(self, request: RunRequest, emit, ask, bind):
         if request.sandbox not in ("read-only", "workspace-write"):
             raise HarnessError("Codex 只允许只读或工作区写入权限")
+        env = dict(request.env)
+        if not env.get("MODEFLARE_API_KEY") and env.get("OPENAI_API_KEY"):
+            env["MODEFLARE_API_KEY"] = env["OPENAI_API_KEY"]
+        request = replace(request, env=env)
         completion = asyncio.get_running_loop().create_future()
         thread_id = request.native_id
         turn_id = ""
@@ -51,7 +56,14 @@ class CodexAdapter:
                         str(error.get("message") or f"Codex 本轮未完成：{turn.get('status')}")))
             elif method == "error" and not params.get("willRetry", False):
                 if not completion.done():
-                    completion.set_exception(HarnessError("Codex 执行失败，请检查原生登录与模型配置"))
+                    error = params.get("error") or {}
+                    detail = error.get("message") if isinstance(error, dict) else str(error)
+                    detail = detail or params.get("message") or params.get("msg") or "Codex error notification"
+                    detail = str(detail)[:1000]
+                    for key, value in request.env.items():
+                        if any(marker in key.upper() for marker in ("KEY", "TOKEN", "SECRET", "PASSWORD")) and value:
+                            detail = detail.replace(value, "***")
+                    completion.set_exception(HarnessError(f"Codex error: {detail}"))
 
         async def respond(method, params):
             if params.get("threadId") != thread_id or (
@@ -106,7 +118,8 @@ class CodexAdapter:
             rpc.native_id = thread_id
             policy = {"type": "readOnly"} if request.sandbox == "read-only" else {
                 "type": "workspaceWrite", "writableRoots": [str(request.cwd)],
-                "networkAccess": False}
+                "networkAccess": request.env.get("EASEL_CODEX_NETWORK_ACCESS", "").strip().lower()
+                                  in ("1", "true", "yes", "on")}
             params = {"threadId": thread_id, "input": [{"type": "text", "text": request.prompt}],
                       "approvalPolicy": "on-request", "sandboxPolicy": policy}
             if request.model:
